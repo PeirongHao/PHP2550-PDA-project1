@@ -2,7 +2,7 @@
 
 # Summary
 
-Increased WBGT has been shown to harm marathon performance (Ely et al., 2007). Weather has less of an impact on female runners than on male runners (Vihma, 2010). We want to investigate how weather affects the performance of marathon runners of different ages and genders. We created multivariate visualizations and fitted a linear model in our exploratory data analysis to better understand the relation among the variables. To sum up, younger runners run much faster. In addition, men generally run faster than women. Bad weather, including high temperatures and strong winds, negatively affects completion time. 
+Increased WBGT has been shown to harm marathon performance (Ely et al., 2007). Weather has less of an impact on female runners than on male runners (Vihma, 2010). We want to investigate how weather affects the performance of marathon runners of different ages and genders. We created multivariate visualizations and fitted a linear model in our exploratory data analysis to better understand the relation among the variables. To sum up, younger runners run much faster. In addition, men generally run faster than women. Bad weather, including high temperatures and strong winds, negatively affects completion time. It is worth examining more marathons in different regions to investigate the impact of weather on performance further.
 
 # Files
 
