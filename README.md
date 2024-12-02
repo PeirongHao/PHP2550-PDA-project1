@@ -12,4 +12,4 @@ Increased WBGT has been shown to harm marathon performance (Ely et al., 2007). W
 
 # Dependencies
 
-We used the following packages for this analysis: tidyverse, knitr, tidyr, dplyr, kableExtra, readr, visdat, gridExtra, corrplot, and olsrr.
+I used the following packages for this analysis: tidyverse, knitr, tidyr, dplyr, kableExtra, readr, visdat, gridExtra, corrplot, and olsrr.
