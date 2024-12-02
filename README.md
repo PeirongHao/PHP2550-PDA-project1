@@ -1,4 +1,4 @@
-## PHP2550-PDA-project1
+## PHP2550 PDA project1
 
 # Summary
 
