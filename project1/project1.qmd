@@ -17,9 +17,13 @@ execute:
 
 # Introduction
 
-[1] demonstrates that heat stress significantly slows down pacing during aerobic exercise. Additionally, [2] highlights a negative relationship between Wet-Bulb Globe Temperature (WBGT) and marathon outcomes, with performance declining as WBGT increases. Furthermore, older adults face greater challenges in heat tolerance, which impairs their ability to maintain performance in warmer conditions [3]. Sex differences also play a critical role in endurance performance. According to [4], women generally have lower aerobic fitness and maximal oxygen uptake (VO2max) compared to men. However, women demonstrate advantages such as more consistent pacing strategies and reduced fatigue during endurance running [5]. These benefits, however, are counterbalanced by lower oxygen-carrying capacity and higher body fat percentages [5]. 
+Endurance exercise performance, particularly in long-distance events like marathons, is influenced by a complex interplay of physiological, environmental, and demographic factors. Previous research demonstrates that heat stress slows pacing during aerobic exercise, as it increases core temperature and cardiovascular strain, leading to fatigue and a reduction in overall performance capacity \[1\]. The impact of environmental heat stress is quantified through metrics like the Wet-Bulb Globe Temperature (WBGT), a weighted average of dry bulb, wet bulb, and globe temperature. \[2\] highlights a negative relationship between WBGT and marathon outcomes, with performance declining progressively as WBGT levels rise. These findings underscore the critical role of environmental conditions in determining marathon success.
 
-This project, conducted in collaboration with Dr. Brett Romano Ely and Dr. Matthew Ely from the Department of Health Sciences at Providence College, aimed to build on these findings by investigating the relationship between environmental factors, age, and sex in marathon performance. The goal was to provide a comprehensive understanding of the determinants of marathon success, focusing on how temperature, humidity, solar radiation, and wind influence performance in men and women across the lifespan.
+Age significantly influences performance under heat stress. Older adults face heightened challenges in thermoregulation due to diminished sweat production, reduced cardiovascular efficiency, and lower overall heat dissipation capabilities \[3\]. These limitations impair their ability to maintain performance in warmer conditions, particularly in prolonged endurance activities like marathons. Understanding how age interacts with other environmental variables could provide valuable insight into older athletes' vulnerabilities and needs.
+
+Sex differences add another layer of complexity to endurance performance. While women generally have lower aerobic fitness and maximal oxygen uptake (VO2 max) than men \[4\], they demonstrate distinct advantages, including more consistent pacing strategies and reduced fatigue during endurance running. Even though these characteristics can enhance women's ability to sustain performance over long distances, these benefits are counterbalanced by lower oxygen-carrying capacity and higher body fat percentages, limiting overall performance potential \[5\]. Exploring these differences can inform tailored strategies for improving endurance outcomes across sexes.
+
+This project, conducted in collaboration with Dr. Brett Romano Ely and Dr. Matthew Ely from the Department of Health Sciences at Providence College, aimed to build on these findings by investigating the relationships between environmental factors, age, and sex in marathon performance. Using data from five major marathons collected over the years, this study examined how temperature, humidity, solar radiation, and wind influence marathon performance in men and women. The overarching goal was to provide a more comprehensive understanding of the determinants of marathon success, offering insights to optimize training and environmental adaptation across diverse athlete populations.
 
 # Exploratory Data Analysis (EDA)
 
@@ -36,11 +40,16 @@ library(kableExtra)
 library(readr)
 library(visdat)
 library(gtsummary)
-#library(naniar)
+library(naniar)
 #library(patchwork)
 library(gridExtra)
 library(corrplot)
-library(olsrr)# model selection
+#library(olsrr)# model selection for linear model
+library(splines)
+library(lme4)
+library(lmerTest)  #p-values for lmer models
+library(ggplot2)
+library(gridExtra)
 
 #read in data files
 df.aqi<-read.csv("aqi_values.csv")
@@ -108,19 +117,6 @@ df.marathon.dates %>% abbreviate_vars() %>% vis_miss() + theme(text = element_te
 df.project1.main %>% abbreviate_vars() %>% vis_miss() + theme(text = element_text(size = 7)) + ggtitle("Missing Data")
 ```
 
-There were four datasets, including environmental conditions and participants' performances from five major marathons (Boston, Chicago, New York, Twin Cities, and Grandma's Marathons) from 1993 to 2016. In total, the data contain 11564 runners who participated in 98 marathons over the years. Regarding missingness, 16% of observations from the aqi dataset have missing values in the aqi column. Also, four matches (2011 Chicago, 2011 NYC, 2011 TC, 2012 Grandmas) have missing weather parameters. Since the missingness is unrelated to other data, we consider it missing completely at random, i.e., MCAR.
-
-```{r}
-#| eval: false
-miss_tbl<-df.project1.main %>% filter(if_any(everything(), is.na))%>%
-  mutate(race = as.factor(race))%>%
-  group_by(Year, race)%>%
-  summarise(n = n(),.groups = 'drop')%>%
-  rename(Race = race, `Number of observations` = n)
-kable(miss_tbl, booktabs = TRUE, digits = 2)
-#MCAR
-```
-
 ```{r}
 #start to join datasets
 df.all <- left_join(df.project1.main, df.course.record, by=c("Year","race"))%>%
@@ -185,46 +181,31 @@ df.all <- left_join(df.all, df.aqi.wider, by=c('date'='date_local',"race"))%>%
   arrange(Year, race) 
 
 df.all <- df.all %>%
-  rename(Ozone = `44201`, PM2.5 = `88101`)
-
-
-#summary table
-tbl.summary<-df.all %>% 
-  dplyr::select(-c(Year, X.CR, date, `88502`))%>%
-  mutate(across(c(age.division, sex), as.factor)) %>% 
-  tbl_summary(by = race, 
-              type = list(where(is.numeric) ~ "continuous"),
-              statistic = list(all_continuous() ~ "{mean} ({sd})"),
-              missing="no") %>% add_p() %>%
-  bold_labels() %>% 
-  #italicize_levels() %>% 
-  bold_p(t = 0.05) %>%
-  as_kable_extra(format = "latex", booktabs = TRUE) %>%
-  kable_styling(latex_options = "scale_down")
-
-tbl.summary
+  rename(Ozone = `44201`, PM2.5 = `88101`, Sex=sex)
 ```
 
 ```{r}
-
-
-
-
-#| tbl-cap: Summary table of weather parameters and participants' characteristics for 5 regions
+#| tbl-cap: Summary table of weather parameters and participants' characteristics for all races
 
 df.all %>%
-  select(actual.time, WBGT, Wind, age, sex, Ozone, PM2.5, race)%>%
+  dplyr::select(-c(Year, X.CR, date, `88502`, age, X.rh, Ozone, PM2.5))%>%
+  mutate(actual.time = actual.time/3600, CR=CR/3600)%>%
   tbl_summary(by = race, statistic = list(
       all_continuous() ~ "{mean} ({sd})",
-      all_categorical() ~ "{n} / {N} ({p}%)"),
+      all_categorical() ~ "{n} ({p}%)"),
       digits = all_continuous() ~ 2,
-      label = c(actual.time ~ "Completion Time (seconds)", 
+      label = c(actual.time ~ "Completion Time (hr)", 
                 Wind ~ "Wind speed (km/hr)",
-                age ~ "Age", sex ~ "Sex",
-                Ozone ~ "Ozone (parts per million)",
-                PM2.5 ~ "PM2.5 (micrograms/cubic meter)"
-                ),
-      missing_text = "(Missing)"
+                age.division ~ "Age", 
+                Td..C ~ "Dry bulb temperature in Celcius",
+                Tw..C ~ "Wet bulb temperature in Celcius",
+                Tg..C ~ "Black globe temperature in Celcius",
+                SR.W.m2 ~ "Solar radiation in Watts per meter squared",
+                DP ~ "Dew Point in Celcius",
+                WBGT ~ "Wet Bulb Globe Temperature (WBGT)",
+                CR ~ "Course Record(hr)"),
+      missing="no"
+      #missing_text = "(Missing)",
     ) %>% 
   add_p()%>%
   bold_labels() %>% 
@@ -232,36 +213,135 @@ df.all %>%
   kable_styling(latex_options = "scale_down")
 ```
 
+Completion times and weather variables varied significantly across races, as reflected by p-values below 0.001 for most characteristics. For example, Grandma's Marathon had the highest average dry bulb temperature at 18.86$°C$, while Boston and NYC reported lower averages of 11.64$°C$ and 11.73$°C$, respectively. Solar radiation also showed notable differences, with Grandma's Marathon recording the highest levels at 676.81 $W/m²$ and NYC the lowest at 401.15 $W/m²$. Wind speed followed a similar trend, with Boston experiencing the highest average at 11.99 $km/hr$, compared to Chicago, which had the lowest at 8.21 $km/hr$. These environmental variations appeared to influence completion times. Runners in Boston achieved the fastest average completion time of 3.3 hours, while participants in New York City had the slowest average time of 3.7 hours.
+
+There were four datasets, including environmental conditions and participants' performances from five major marathons (Boston, Chicago, New York, Twin Cities, and Grandma's Marathons) spanning 1993 to 2016. In total, the data contained 11,564 runners who participated in 98 marathons over the years. As shown in Table 1, weather variables and course records were statistically significantly different across races.
 
 ```{r}
-#| fig-cap: Number of people breaking marathon records by sex as age increases
+#| eval: false
+#| fig-cap: Trend plot for completion time
+summary_long <- df.all %>%
+  group_by(age, Sex) %>%
+  summarize(
+    Avg = mean(actual.time, na.rm = TRUE)/3600,
+    Min = min(actual.time, na.rm = TRUE)/3600,
+    Max = max(actual.time, na.rm = TRUE)/3600,
+    .groups = "drop") %>%
+  pivot_longer(
+    cols = c(Avg, Min, Max),
+    names_to = "performance_metric",
+    values_to = "performance"
+  )
+
+ggplot(summary_long, aes(x = age, y = performance, color = Sex, group = interaction(Sex, performance_metric))) +
+  geom_line(size = 1) +
+  geom_point(size = 2) +
+  facet_wrap(~ performance_metric, scales = "free_y", ncol = 1) +
+  labs(
+    x = "Age Division",
+    y = "Course Record (Hours)",
+    color = "Sex"
+  ) +
+  theme_minimal() +
+  theme(
+    text = element_text(size = 12),
+    legend.position = "top",
+    panel.grid.major = element_line(color = "gray90")
+  )
+#On average, as age increases, completion time increase. There was no significant difference between sexes in the overall trend of completion time.
+```
+
+```{r}
+#| tab-cap: Missingness by Race
+miss_race<-df.project1.main %>% filter(if_any(everything(), is.na))%>%
+  mutate(race = as.factor(race))%>%
+  group_by(Year, race)%>%
+  summarise(n = n(),.groups = 'drop')%>%
+  rename(Race = race, `Number of observations` = n)
+kable(miss_race, booktabs = TRUE, digits = 2)
+#MCAR
+```
+
+Four matches (2011 Chicago, 2011 NYC, 2011 TC, 2012 Grandmas) had missing weather parameters. Since the missingness was unrelated to other data, it was considered as missing completely at random (MCAR).
+
+```{r}
+#| tab-cap: Single variable missingness table in AQI dataset
+miss_aqi <- miss_var_summary(df.aqi.wider)[c(1:2),]#first 2 variables have missing values
+
+kable(miss_aqi, format = "latex", booktabs = TRUE, digits = 2)%>%
+  kable_styling(latex_options = "hold_position")
+```
+
+The air quality index (AQI) dataset contained a significant number of missing values. It is important to note that although PM2.5 was coded in 88502, it had more missing values than 88101, the primary PM2.5 measurement. Because Ozone and PM2.5 measurements were recorded at different sublocations and times of the day for each city, I calculated an average of each parameter for each marathon date and site.
+
+```{r}
+#| eval: false
+#| tbl-cap: Number of people breaking marathon records by sex as age increases
 #| fig-height: 3
 
-trend.record.break <-df.all %>%
+trend.record.break <- df.all %>%
   filter(X.CR < 0) %>%
-  select(sex, X.CR, age) %>%
-  group_by(age, sex) %>%
+  select(Sex, X.CR, age) %>%
+  group_by(age, Sex) %>%
   summarise(n = n(),.groups = 'drop') %>%
-  arrange(sex, age) %>%
-  mutate(sex = factor(sex))
+  arrange(Sex, age) %>%
+  mutate(Sex = factor(Sex)) #%>%
+  #pivot_wider(names_from = Sex, values_from = n)
 
 # Trend plot - Break record
-ggplot(trend.record.break)+ 
-  geom_line(aes(x=age, y = n, color=sex, group=sex), linewidth=1.7)+
+ggplot(trend.record.break)+
+  geom_line(aes(x=age, y = n, color=Sex, group=Sex), linewidth=1.7)+
     scale_x_continuous(breaks = seq(21, 41, by = 2), guide = guide_axis(angle = 45))+
   theme_minimal()+
   ylab("Number of runners")+
   xlab("Age")
 ```
 
-For all five races, women aged between 18 and 60 participated in more races than the other age groups, and more men between 18 and 75 competed in races than the other age groups. Our first aim is to examine the effects of increasing age on marathon performance in men and women. CR is the course record for each year's marathon, obtained from last year's record. %CR refers to the percent course record. A positive %CR means the percentage more time used to complete the marathon. A negative %CR means the participant breaks the record. We can calculate the completion time for each individual using CR \* (1+%CR). Figure 1 displays the number of people who broke marathon records. The record-breakers were between the ages of 21 and 41. Males broke the record in a younger age range, but females could break the record in the broader age group.
+The first aim was to examine the effects of increasing age on marathon performance in men and women. CR is the course record for each year's marathon, obtained from last year's record. %CR refers to the percent course record. A positive %CR means the percentage more time used to complete the marathon. A negative %CR means the participant breaks the record. I calculated the completion time for each individual using CR \* (1+%CR). All record-breakers were between the ages of 21 and 41. Males broke the record in a younger age range (21 to 34 years old), but females could break the record in the broader age group (23 to 41 years old).
 
 ```{r}
+#| fig-cap: Spline plot of completion time vs age
+df_clean <- df.all %>%
+  filter(!is.na(age) & !is.na(actual.time))
+
+df_clean$completion_time_hours <- df_clean$actual.time / 3600
+
+spline_model_F <- lm(completion_time_hours ~ ns(age, df = 2), data = df_clean[df_clean$Sex == "F", ])
+spline_model_M <- lm(completion_time_hours ~ ns(age, df = 2), data = df_clean[df_clean$Sex == "M", ])
+
+age_range <- seq(min(df_clean$age), max(df_clean$age), length.out = 200)
+
+pred_F <- predict(spline_model_F, newdata = data.frame(age = age_range))
+pred_M <- predict(spline_model_M, newdata = data.frame(age = age_range))
+
+spline_data <- data.frame(
+  age = rep(age_range, 2),
+  completion_time = c(pred_F, pred_M),
+  sex = rep(c("Female", "Male"), each = length(age_range))
+)
+
+ggplot(data = df_clean, aes(x = age, y = completion_time_hours, color = Sex)) +
+  geom_point(alpha = 0.2, size = 0.7) +  
+  geom_line(data = spline_data, aes(x = age, y = completion_time, color = sex), size = 1.2) +
+  labs(
+    x = "Age (years)",
+    y = "Completion Time (hours)",
+    color = "Gender"
+  ) +
+  scale_color_manual(values = c("Female" = "red", "Male" = "blue")) +
+  theme_minimal()
+
+```
+
+Figure 1 reveals a U-shaped relationship between age and marathon completion time. Men generally completed marathons faster than women. People aged between 20 and 40 ran much faster than the other age groups. Regarding the completion time of each match, some people in the elder age group took longer than 9 hours to complete, with the longest time being 11 hours and 54 minutes. These outliers could be due to some data collection error since Boston, Twin Cities, and Chicago marathons must be completed within 6 hours, 6 hours and 15 minutes, 6 and a half hours, respectively. However, Grandma's and NYC marathons allow participants to continue finishing on the sidewalk after 7 hours and 8 hours limit, respectively, without services, including cross-street protection, medical assistance, and aid stations. Thus, even though those outliers weren't official finishing times, they could be valid self-reported completion times.
+
+```{r}
+#| eval: false
 #| fig-cap: Distribution of completion time for each age group
 #| output: true
 #| fig-height: 3.5
 
-ggplot(df.all, aes(x=age.division, y=actual.time, fill=sex)) +
+ggplot(df.all, aes(x=age.division, y=actual.time, fill=Sex)) +
   geom_violin() +
   scale_y_continuous(breaks = c(3600*c(2,3,4,5,6,7,8,9)),
                      labels = c("2HR","3HR","4HR","5HR","6HR","7HR","8HR","9HR"))+
@@ -276,19 +356,15 @@ tbl.time<-t(summary(as.period(df.all$actual.time)))
 kable(tbl.time, booktabs = TRUE, digits=2)
 ```
 
-Figure 2 shows a corresponding trend: people between 20 and 40 ran much faster than the other age groups. Regarding the completion time of each match, some people in the elder age group took longer than 9 hours to complete, with the longest time being 11 hours and 54 minutes. These outliers could be due to some data collection error since Boston, Twin Cities, and Chicago marathons must be completed within 6 hours, 6 hours, and 15 minutes, 6 and a half hours, respectively. However, Grandma's and NYC marathons allow participants to continue finishing on the sidewalk after 7 hours and 8 hours limit, respectively, without services, including cross-street protection, medical assistance, and aid stations. Thus, even though those outliers weren't official finishing times according to [very well fit](https://www.verywellfit.com/how-strict-are-time-limits-in-races-2910929), they could be valid self-reported completion times.
-
 ```{r}
 #| eval: false
 
-# summary table - participants overall
-# Select relevant columns, Create Summary Table
 trend.age.impact.summ<-df.all %>%
-  select(sex, actual.time, age) %>%
-  group_by(age, sex) %>%
+  select(Sex, actual.time, age) %>%
+  group_by(age, Sex) %>%
   summarise(n = n(),.groups = 'drop') %>% 
-  # arrange(sex, age) %>% 
-  mutate(sex = factor(sex))
+  # arrange(Sex, age) %>% 
+  mutate(Sex = factor(Sex))
 
 trend.age.impact.summ
 ```
@@ -298,66 +374,46 @@ trend.age.impact.summ
 
 #age: 14-91
 
-# Trend plot - participants overall
 ggplot(trend.age.impact.summ)+ 
-  geom_line(aes(x=age, y = n, color=sex, group=sex), linewidth=1.7)+
+  geom_line(aes(x=age, y = n, color=Sex, group=Sex), linewidth=1.7)+
     scale_x_continuous(breaks = seq(14, 92, by = 2), guide = guide_axis(angle = 45))+
   ylab("Number of participants")+
   xlab("Age")
 
-# Trend plot - participants by region
 df.all %>%
-  ggplot(aes(x = age, colour = sex)) +
+  ggplot(aes(x = age, colour = Sex)) +
   facet_wrap(vars(race), ncol = 3) +
   geom_point(stat = "count",size=1) +
   geom_line(stat = "count") +
   labs(x = "Age", y = "Number of participants")
 ```
 
-Our second aim is to explore the impact of environmental conditions on marathon performance and examine if the effect differs across age and gender. We focus on a few weather parameters. First of all, Wet Bulb Globe Temperature (WBGT) is an informative measurement since it is derived from three different sources: Wet bulb temperature (Tw, which accounts for humidity), Black globe temperature (Tg, which accounts for solar radiation), and Dry bub temperature (Td). Flag, which is determined by WBGT and the chance of heat illness, is another option. The Flag variable has five categories arranged from best to worst condition: White, Green, Yellow, Red, and Black. We do not have any data falling in the Black condition, probably because Marathons are canceled in extreme weather.
+The second aim was to explore the impact of environmental conditions on marathon performance and examine if the effect differs across age and gender. Wet Bulb Globe Temperature (WBGT) is derived from three different sources: Wet bulb temperature (Tw, which accounts for humidity), Black globe temperature (Tg, which accounts for solar radiation), and Dry bub temperature (Td). Flag is determined by WBGT and the chance of heat illness. The Flag variable has five categories arranged from best to worst condition: White, Green, Yellow, Red, and Black. We did not have any data falling in the Black condition, probably because Marathons were canceled in extreme weather.
 
 ```{r}
-#| fig-cap: Impact of flag on completion time as age increases
-#| fig-height: 5
-ggplot(data = na.omit(df.all[,c("Flag","actual.time","sex","age")]), 
-       aes(x = age, y = actual.time, color = sex)) +
-  geom_point(size=0.1,alpha=0.2) + 
-  stat_smooth() + 
-  facet_wrap(~Flag)+
+#| fig-cap: Impact of temperature on completion time
+#| fig-height: 2.5
+
+df.all %>% ggplot(aes(x=WBGT, y=actual.time/3600, color=age.division)) +
+  geom_smooth()+
   theme_minimal()+
-  scale_y_continuous(breaks = c(3600*c(2,3,4,5,6,7,8,9)), 
-                     labels = c("2HR","3HR","4HR","5HR","6HR","7HR","8HR","9HR"))+
-  labs(x = "Age", y = "Completion Time")
+  labs(x = "Wet Bulb Globe Temperature (WBGT)", y = "Completion Time in hours",
+       color = "Age Group")+
+  theme(
+    legend.text = element_text(size = 5),
+    legend.title = element_text(size = 6)
+    )+
+  facet_grid(.~Sex)
 ```
 
-Figure 3 demonstrates that completion time increases as age increases, and there is little variation in the trend among the various Flag groups. Before the age of 50, there is no remarkable difference in the completion times of men and women. Women took slightly longer to finish between 50 and 75, but the pattern flips around the age of 77.
-
-```{r}
-#| fig-cap: Impact of flag on participation as age increases
-#| fig-height: 3.5
-
-#summary table
-# df.all %>% 
-#   select(age.division, Flag) %>% 
-#   group_by(Flag, age.division) %>% 
-#   summarise(n=n())
-
-df.all %>% filter(!is.na(Flag)) %>%
-  ggplot(aes(age))+
-  geom_histogram(bins=30)+
-  facet_grid(.~Flag)+
-  theme_minimal()+
-  labs(x = "Age", y = "Number of participants")
-```
-
-According to Figure 4, more people took part when the Flag was green, and a far lower number did so when it was red. Although the number of participants was significantly lower when the Flag was yellow or red, those who did participate may have been more motivated and had more training than those who did not, allowing them to finish the marathons in a comparable time frame.
+As shown in Figure 2, heat stress, measured by WBGT, significantly impacts marathon performance, with older runners exhibiting more fluctuations in completion times. In contrast, younger and middle-aged runners were less affected, showing relatively stable completion times, though with a slight increasing trend as WBGT rises. While men generally outperform women, both genders exhibit similar patterns of performance.
 
 ```{r}
 #| fig-cap: Impact of wind on completion time
-#| fig-height: 4
+#| fig-height: 3
 df.all %>%
   mutate(race = factor(race, levels=c("Boston", "Grandmas", "TC", "Chicago", "NYC"))) %>%
-ggplot(aes(x=Wind, y=actual.time/3600, color=sex)) +
+ggplot(aes(x=Wind, y=actual.time/3600, color=Sex)) +
   geom_smooth()+
   # scale_y_continuous(breaks = c(3600*c(3,4)),
   #                    labels = c("3HR","4HR"))+
@@ -366,9 +422,7 @@ ggplot(aes(x=Wind, y=actual.time/3600, color=sex)) +
   #facet_grid(.~race)
 ```
 
-Another important weather parameter is wind speed, measured in km/h. There is a slight difference between the effects of wind speed on completion time for men and women. Based on Figure 5, NYC participants took roughly 30 minutes longer to complete tasks than Boston participants on average. This might result from the events being hosted at different times of the year: Boston in April, Grandmas (in Minnesota) in June, Twin Cities and Chicago in October, and New York City in November. All of the locations above are in the northern portion of the United States; therefore, in the winter, the wind and snowy roads of New York City affected runners more than the bright, breezy summers of Boston.
-
-The air quality index (aqi), which is present in the data, has a lot of missing values. Hence, we choose another variable called arithmetic_mean, which is used to calculate aqi instead. Ozone and PM2.5 measurements are associated with parameter codes 44201 and 88101. It is important to note that although PM2.5 is coded in 88502, it has many more missing values than 88101, the primary PM2.5 measurement. Because Ozone and PM2.5 measurements were recorded at different sublocations and times of the day for each city, we calculate an average of each parameter for each marathon date and site.
+Another important weather parameter is wind speed, measured in $km/h$. In Figure 3, there is a slight difference between the effects of wind speed on completion time for men and women. Women were less affected by changes in wind speed, as indicated by their relatively flat trend line.
 
 ```{r}
 #| fig-cap: Impact of air pollutants' condition on completion time
@@ -380,7 +434,7 @@ p.ozone<-df.all %>% ggplot(aes(x=Ozone, y=actual.time/3600, color=age.division))
   #                    labels = c("3HR","4HR"))+
   theme_minimal()+
   labs(x = "Ozone (parts per million)", y = "Completion Time in hours")+
-  facet_grid(.~sex)+
+  facet_grid(.~Sex)+
   theme(legend.position="none")
 
 p.pm2.5<-df.all %>% ggplot(aes(x=PM2.5, y=actual.time/3600, color=age.division)) +
@@ -394,7 +448,7 @@ p.pm2.5<-df.all %>% ggplot(aes(x=PM2.5, y=actual.time/3600, color=age.division))
     legend.text = element_text(size = 5),
     legend.title = element_text(size = 6)
     )+
-  facet_grid(.~sex)
+  facet_grid(.~Sex)
 
 grid.arrange(p.ozone, p.pm2.5)
 ```
@@ -402,33 +456,8 @@ grid.arrange(p.ozone, p.pm2.5)
 [Ozone Solutions](https://ozonesolutions.com/ozone-safety/#:~:text=The%20NIOSH%20recommended%20exposure%20limit,dangerous%20to%20life%20or%20health.) suggested the safe limit for ozone is 0.1 ppm, and our Ozone data were well below that threshold. The relationships between Completion Time and Ozone held constant for most age groups but varied slightly for the youngest and eldest groups in Figure 6. According to [Indoor Air Hygiene Institute](https://www.indoorairhygiene.org/pm2-5-explained/#:~:text=Most%20studies%20indicate%20PM2.,breathing%20issues%20such%20as%20asthma.), PM2.5 at or under 12 micrograms/cubic meter is considered healthy, but it is deemed unhealthful when it reaches or surpasses 35 micrograms/cubic meter. Because the recorded PM2.5 data were below 35 micrograms/cubic, there was not much health concern about it. Concerning variation in completion time with PM2.5, there was little change for the majority but slight variation for the youngest and eldest groups. These relations held for both sex groups.
 
 ```{r}
-#| tbl-cap: Summary table of weather parameters and participants' characteristics for 5 regions
-
-df.all %>%
-  select(actual.time, WBGT, Wind, age, sex, Ozone, PM2.5, race)%>%
-  tbl_summary(by = race, statistic = list(
-      all_continuous() ~ "{mean} ({sd})",
-      all_categorical() ~ "{n} / {N} ({p}%)"),
-      digits = all_continuous() ~ 2,
-      label = c(actual.time ~ "Completion Time (seconds)", 
-                Wind ~ "Wind speed (km/hr)",
-                age ~ "Age", sex ~ "Sex",
-                Ozone ~ "Ozone (parts per million)",
-                PM2.5 ~ "PM2.5 (micrograms/cubic meter)"
-                ),
-      missing_text = "(Missing)"
-    ) %>% 
-  add_p()%>%
-  bold_labels() %>% 
-  as_kable_extra(format = "latex", booktabs = TRUE, linesep = "") %>%
-  kable_styling(latex_options = "scale_down")
-```
-
-From Table 1, we can tell that the marathon region is associated with the following variables: Completion Time, WBGT, Wind, Age, Ozone, and PM2.5 since their p-values of the Kruskal-Wallis rank sum test and Pearson's Chi-squared test are less than 0.05. New York City has the longest average completion hour (3.7 hours), while Boston has the least at 3.5 hours; the difference is 12 minutes. Four areas' WBGT mean values fall between 10 and 18C, which meets the Green Flag definition; Chicago is slightly over 18 and falls under the Yellow Flag. There is a 3.78 km/hr difference in wind speed between the strongest and weakest wind-blown areas. The ages of the participants ranged from 44 to 50 on average. There were slightly more male than female participants in each race. The mean recorded ozone values for the races were between 0.02 and 0.04 parts per million. Chicago holds the record for the highest PM2.5 levels, at 13 micrograms/cubic meter, just over the good quality standard of 12.
-
-```{r}
 #| fig-cap: Correlation plot
-#| fig-height: 7
+#| fig-height: 3
 
 #largest impact analysis: correlation
 df.cor.subset<-df.all %>%
@@ -439,55 +468,140 @@ colnames(df.cor.subset) <- c("Completion Time", "WBGT", "Wind", "Ozone", "PM2.5"
 corrplot.mixed(cor(df.cor.subset, use = "complete.obs"))
 ```
 
-Our last aim is to identify the weather parameters most affecting marathon performance. There is no weather parameter that has a strong correlation with Completion Time, and there is no very strong correlation between weather parameters either (see Figure 7). In this case, we have Completion Time (Y) and try to find its linear relationship with other quantitative weather variables, age, and sex (X). Best subset, forward, and backward selection all result in the model: Completion Time = 5537.299 + 73.790 \* WBGT + 31.721 \* Wind - 30594.337 \* Ozone - 403.091 \* sexM + 150.287 \* age.
+The final aim was to identify the weather parameters most affecting marathon performance. No weather parameter showed a strong correlation with completion time, nor were there particularly strong correlations among the weather parameters themselves. Due to the sex differences found earlier, I built two hierarchical random intercept (differ by race) models for females and males. The outcome of interest was `completion time`, and I aimed to find its linear relationship with weather variables, age, and age squared.
 
 ```{r}
-#| tbl-cap: Coefficients of linear model
+df_hier <- df.all %>%
+  filter(complete.cases(WBGT, Wind, PM2.5, Ozone, Sex, age, actual.time, race)) %>%
+  mutate(actual.time=actual.time/3600)   
 
-df.all$sex<-as.factor(df.all$sex)
+df_M <- df_hier %>% filter(Sex == "M") %>%
+  select(-c(Sex))
 
-#linear model
-lm.full <- lm(actual.time ~ WBGT + Wind + PM2.5 +
-                Ozone + sex + age, data = df.all)
-#summary(lm.full)
+df_F <- df_hier %>% filter(Sex == "F") %>%
+  select(-c(Sex))
 
-#Best Subset Selection: "WBGT Wind Ozone sex age"
-#best.subset <- ols_step_best_subset(lm.full) 
-#best.subset$metrics$predictors[which.min(best.subset$metrics$cp)]
+#random intercept models by sex
+model_F <- lmer(actual.time ~ poly(age, 2) + WBGT + Wind + PM2.5 + Ozone + 
+                          (1|race), data=df_F)
 
-# #forward selection
-# ols_step_forward_aic(lm.full, details=FALSE)
-# #backward selection
-# ols_step_backward_aic(lm.full, details=FALSE)
+model_M <- lmer(actual.time ~ poly(age, 2) + WBGT + Wind + PM2.5 + Ozone + 
+                          (1|race), data=df_M)
 
-lm.best <- lm(actual.time ~ WBGT + Wind + Ozone + sex + age, data = df.all)
-s<-summary(lm.best)
-kable(coefficients(lm.best), col.names = c("Coefficients"), 
-      booktabs = TRUE, digits = 3)
-
-adj.r<-s$adj.r.squared
-aic<-AIC(lm.best)
+df_F$preds <- predict(model_F)
+df_M$preds <- predict(model_M)
 ```
 
-The interpretation of the model is as follows: for each additional unit increase in WBGT, the completion time is expected to increase by 73.790 seconds, holding all other variables constant; for each additional unit increase in wind speed, the completion time is expected to increase by 31.721 seconds, holding all other variables constant; for each additional unit increase in ozone, the completion time is expected to decrease by 30594.337 seconds, holding all other variables constant; for each additional unit increase in age, the completion time is expected to increase by 150.287 seconds, holding all other variables constant; for a male runner, we expect completion time to decrease by 403.091 seconds compared to a female, holding other variables constant.
+```{r}
+kable(summary(model_F)$coefficients, booktabs = TRUE, digits = 3, caption="Fixed Effects - Female")
+kable(ranef(model_F)$race, booktabs = TRUE, digits = 3, caption="Random Effects - Female")#Variance: 0.02078
+```
 
-For this model, the overall F-test statistic is 2176, which is associated with a p-value \<2.2e-16. Since the p-value \<$\alpha$=0.05, we reject the null hypothesis and conclude that this model is in fact significant. There is a relationship between Y (completion time) and at least some of the predictor variables (WBGT, Wind, Ozone, Sex, Age). When looking at the t-tests on the slopes for predictor variables, they have small p-values (\<$\alpha$=0.05), thus they are significant predictors. Coefficient of determination is the Adjusted R-squared value, 49.55% of the variability in completion time (Y) is explained by its linear relationship with WBGT, Wind, Ozone, Sex, and Age (X).
+```{r}
+kable(summary(model_M)$coefficients, booktabs = TRUE, digits = 3, caption="Fixed Effects - Male")
+kable(ranef(model_M)$race, booktabs = TRUE, digits = 3, caption="Random Effects - Male")#Variance: 0.02414
+```
 
-# Conclusion 
+```{r}
+#| fig-cap: Outcome Trend by Weather Parameters
+#| fig-height: 9
 
-People aged between 20 and 40 run much faster than the other age groups and could break course records. Age, wind speed, and WBGT all have a positive linear relationship with completion time: older runners finish the marathon later; severe weather, such as strong winds and higher temperatures, also delays completion. Additionally, we discovered that, on average, men run faster than women. One strange finding is that as ozone levels rise, individuals finish marathons faster. This could result from the observed ozone level falling between 0 and 0.054 ppm, which is thought to be good air quality ([Kaiterra](https://learn.kaiterra.com/en/resources/ozone-what-levels-are-safe)). Furthermore, PM2.5 is not considered a significant predictor of completion time. Our linear model's modified R-squared of 49.55% is relatively low. Four marathons had incomplete weather data. If we conduct imputation for missing values, we can get more robust results. It is also worth examining more marathons in different regions to investigate the impact of weather on performance further.
+p.wbgt.f <- ggplot(df_F, aes(x = WBGT, y = preds, color = race)) +
+    geom_smooth(method = "lm", fullrange = TRUE, size = 0.3) +
+    geom_jitter(aes(x = WBGT, y = actual.time, group = race, color = race),
+                alpha = 0.1) +
+    labs(x = "WBGT", y = "Completion Time (hr)") +
+    ggtitle("Female") +
+    scale_colour_discrete('race', name="Race")
+
+
+p.wbgt.m <- ggplot(df_M, aes(x = WBGT, y = preds, color = race)) +
+    geom_smooth(method = "lm", fullrange = TRUE, size = 0.3) +
+    geom_jitter(aes(x = WBGT, y = actual.time, group = race, color = race),
+                alpha = 0.1) +
+    labs(x = "WBGT", y = "Completion Time (hr)") +
+    ggtitle("Male") +
+    scale_colour_discrete('race', name="Race")
+
+
+p.wind.f <- ggplot(df_F, aes(x = Wind, y = preds, color = race)) +
+    geom_smooth(method = "lm", fullrange = TRUE, size = 0.3) +
+    geom_jitter(aes(x = Wind , y = actual.time, group = race, color = race),
+                alpha = 0.1) +
+    labs(x = "Wind ", y = "Completion Time (hr)") +
+    ggtitle("Female") +
+    scale_colour_discrete('race', name="Race")
+
+
+p.wind.m <- ggplot(df_M, aes(x = Wind, y = preds, color = race)) +
+    geom_smooth(method = "lm", fullrange = TRUE, size = 0.3) +
+    geom_jitter(aes(x = Wind, y = actual.time, group = race, color = race),
+                alpha = 0.1) +
+    labs(x = "Wind", y = "Completion Time (hr)") +
+    ggtitle("Male") +
+    scale_colour_discrete('race', name="Race")
+
+
+p.pm2.5.f <- ggplot(df_F, aes(x = PM2.5, y = preds, color = race)) +
+    geom_smooth(method = "lm", fullrange = TRUE, size = 0.3) +
+    geom_jitter(aes(x = PM2.5, y = actual.time, group = race, color = race),
+                alpha = 0.1) +
+    labs(x = "PM2.5", y = "Completion Time (hr)") +
+    ggtitle("Female") +
+    scale_colour_discrete('race', name="Race")
+
+
+p.pm2.5.m <- ggplot(df_M, aes(x = PM2.5, y = preds, color = race)) +
+    geom_smooth(method = "lm", fullrange = TRUE, size = 0.3) +
+    geom_jitter(aes(x = PM2.5, y = actual.time, group = race, color = race),
+                alpha = 0.1) +
+    labs(x = "PM2.5", y = "Completion Time (hr)") +
+    ggtitle("Male") +
+    scale_colour_discrete('race', name="Race")
+
+
+p.ozone.f <- ggplot(df_F, aes(x = Ozone , y = preds, color = race)) +
+    geom_smooth(method = "lm", fullrange = TRUE, size = 0.3) +
+    geom_jitter(aes(x = Ozone, y = actual.time, group = race, color = race),
+                alpha = 0.1) +
+    labs(x = "Ozone", y = "Completion Time (hr)") +
+    ggtitle("Female") +
+    scale_colour_discrete('race', name="Race")  + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+
+p.ozone.m <- ggplot(df_M, aes(x = Ozone , y = preds, color = race)) +
+    geom_smooth(method = "lm", fullrange = TRUE, size = 0.3) +
+    geom_jitter(aes(x = Ozone , y = actual.time, group = race, color = race),
+                alpha = 0.1) +
+    labs(x = "Ozone", y = "Completion Time (hr)") +
+    ggtitle("Male") +
+    scale_colour_discrete('race', name="Race")  + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) 
+
+grid.arrange(p.wbgt.f, p.wbgt.m, 
+             p.wind.f, p.wind.m,
+             p.pm2.5.f, p.pm2.5.m,
+             p.ozone.f, p.ozone.m, nrow = 4)
+```
+
+In terms of fixed effects, the intercept and coefficients for `age`, `age squared`, `WBGT`, `wind`, and `PM2.5` are similar in both the female and male models. Although the coefficient for `ozone` differs a little between the two models, the p-values indicate that the estimated coefficients for `ozone` are not statistically significant. The interpretation of the significant weather parameters for the female model is as follows: for each additional unit increase in WBGT, the completion time is expected to increase by 0.006 hours, holding all other variables constant. For each additional unit increase in wind speed, the completion time is expected to increase by 0.008 hours, holding all other variables constant. For each additional unit increase in PM2.5, the completion time is expected to increase by 0.009 hours, holding all other variables constant. The interpretation for the male model is similar. The random effects for both female and male models are also quite similar, with the variance of the intercept being 0.02078 and 0.02414, respectively. The coefficient values are relatively small, and their magnitudes are similar across female and male groups, as illustrated in Figure 6.
+
+# Conclusion
+
+People aged between 20 and 40 run much faster than the other age groups and could break course records. Age and weather parameters have a positive linear relationship with completion time: older runners finish the marathon later; severe weather, such as strong winds and higher temperatures, also delays completion. Additionally, we discovered that, on average, men run faster than women. Ozone is not s statistically significant parameter in the random intercept models. This could result from the observed ozone level falling between 0 and 0.054 ppm, which is thought to be good air quality ([Kaiterra](https://learn.kaiterra.com/en/resources/ozone-what-levels-are-safe)). Four marathons had incomplete weather data. If we conduct imputation for missing values, we might get more robust results. It is also worth examining more marathons in different regions to investigate the impact of weather on performance further.
 
 # References
 
-[1] Ely, B. R., Cheuvront, S. N., Kenefick, R. W., & Sawka, M. N. (2010). Aerobic performance is degraded, despite modest hyperthermia, in hot environments. Med Sci Sports Exerc, 42(1), 135-41.
+\[1\] Ely, B. R., Cheuvront, S. N., Kenefick, R. W., & Sawka, M. N. (2010). Aerobic performance is degraded, despite modest hyperthermia, in hot environments. Med Sci Sports Exerc, 42(1), 135-41.
 
-[2] Ely, M. R., Cheuvront, S. N., Roberts, W. O., & Montain, S. J. (2007). Impact of weather on marathon-running performance. Medicine and science in sports and exercise, 39(3), 487-493.
+\[2\] Ely, M. R., Cheuvront, S. N., Roberts, W. O., & Montain, S. J. (2007). Impact of weather on marathon-running performance. Medicine and science in sports and exercise, 39(3), 487-493.
 
-[3] Kenney, W. L., & Munce, T. A. (2003). Invited review: aging and human temperature regulation. Journal of applied physiology, 95(6), 2598-2603.
+\[3\] Kenney, W. L., & Munce, T. A. (2003). Invited review: aging and human temperature regulation. Journal of applied physiology, 95(6), 2598-2603.
 
-[4] Yanovich, R., Ketko, I., & Charkoudian, N. (2020). Sex differences in human thermoregulation: relevance for 2020 and beyond. Physiology, 35(3), 177-184.
+\[4\] Yanovich, R., Ketko, I., & Charkoudian, N. (2020). Sex differences in human thermoregulation: relevance for 2020 and beyond. Physiology, 35(3), 177-184.
 
-[5] Besson, T., Macchi, R., Rossi, J., Morio, C. Y., Kunimasa, Y., Nicol, C., ... & Millet, G. Y. (2022). Sex differences in endurance running. Sports medicine, 52(6), 1235-1257.
+\[5\] Besson, T., Macchi, R., Rossi, J., Morio, C. Y., Kunimasa, Y., Nicol, C., ... & Millet, G. Y. (2022). Sex differences in endurance running. Sports medicine, 52(6), 1235-1257.
 
 \newpage
 
