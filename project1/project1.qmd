@@ -473,7 +473,7 @@ The final aim was to identify the weather parameters most affecting marathon per
 ```{r}
 df_hier <- df.all %>%
   filter(complete.cases(WBGT, Wind, PM2.5, Ozone, Sex, age, actual.time, race)) %>%
-  mutate(actual.time=actual.time/3600)   
+  mutate(actual.time=actual.time)   
 
 df_M <- df_hier %>% filter(Sex == "M") %>%
   select(-c(Sex))
@@ -493,13 +493,15 @@ df_M$preds <- predict(model_M)
 ```
 
 ```{r}
+#summary(model_F)
 kable(summary(model_F)$coefficients, booktabs = TRUE, digits = 3, caption="Fixed Effects - Female")
-kable(ranef(model_F)$race, booktabs = TRUE, digits = 3, caption="Random Effects - Female")#Variance: 0.02078
+kable(ranef(model_F)$race, booktabs = TRUE, digits = 3, caption="Random Effects - Female")#Variance: 269360
 ```
 
 ```{r}
+#summary(model_M)
 kable(summary(model_M)$coefficients, booktabs = TRUE, digits = 3, caption="Fixed Effects - Male")
-kable(ranef(model_M)$race, booktabs = TRUE, digits = 3, caption="Random Effects - Male")#Variance: 0.02414
+kable(ranef(model_M)$race, booktabs = TRUE, digits = 3, caption="Random Effects - Male")#Variance: 312832
 ```
 
 ```{r}
@@ -510,7 +512,7 @@ p.wbgt.f <- ggplot(df_F, aes(x = WBGT, y = preds, color = race)) +
     geom_smooth(method = "lm", fullrange = TRUE, size = 0.3) +
     geom_jitter(aes(x = WBGT, y = actual.time, group = race, color = race),
                 alpha = 0.1) +
-    labs(x = "WBGT", y = "Completion Time (hr)") +
+    labs(x = "WBGT", y = "Completion Time (sec)") +
     ggtitle("Female") +
     scale_colour_discrete('race', name="Race")
 
@@ -519,7 +521,7 @@ p.wbgt.m <- ggplot(df_M, aes(x = WBGT, y = preds, color = race)) +
     geom_smooth(method = "lm", fullrange = TRUE, size = 0.3) +
     geom_jitter(aes(x = WBGT, y = actual.time, group = race, color = race),
                 alpha = 0.1) +
-    labs(x = "WBGT", y = "Completion Time (hr)") +
+    labs(x = "WBGT", y = "Completion Time (sec)") +
     ggtitle("Male") +
     scale_colour_discrete('race', name="Race")
 
@@ -528,7 +530,7 @@ p.wind.f <- ggplot(df_F, aes(x = Wind, y = preds, color = race)) +
     geom_smooth(method = "lm", fullrange = TRUE, size = 0.3) +
     geom_jitter(aes(x = Wind , y = actual.time, group = race, color = race),
                 alpha = 0.1) +
-    labs(x = "Wind ", y = "Completion Time (hr)") +
+    labs(x = "Wind ", y = "Completion Time (sec)") +
     ggtitle("Female") +
     scale_colour_discrete('race', name="Race")
 
@@ -537,7 +539,7 @@ p.wind.m <- ggplot(df_M, aes(x = Wind, y = preds, color = race)) +
     geom_smooth(method = "lm", fullrange = TRUE, size = 0.3) +
     geom_jitter(aes(x = Wind, y = actual.time, group = race, color = race),
                 alpha = 0.1) +
-    labs(x = "Wind", y = "Completion Time (hr)") +
+    labs(x = "Wind", y = "Completion Time (sec)") +
     ggtitle("Male") +
     scale_colour_discrete('race', name="Race")
 
@@ -546,7 +548,7 @@ p.pm2.5.f <- ggplot(df_F, aes(x = PM2.5, y = preds, color = race)) +
     geom_smooth(method = "lm", fullrange = TRUE, size = 0.3) +
     geom_jitter(aes(x = PM2.5, y = actual.time, group = race, color = race),
                 alpha = 0.1) +
-    labs(x = "PM2.5", y = "Completion Time (hr)") +
+    labs(x = "PM2.5", y = "Completion Time (sec)") +
     ggtitle("Female") +
     scale_colour_discrete('race', name="Race")
 
@@ -555,7 +557,7 @@ p.pm2.5.m <- ggplot(df_M, aes(x = PM2.5, y = preds, color = race)) +
     geom_smooth(method = "lm", fullrange = TRUE, size = 0.3) +
     geom_jitter(aes(x = PM2.5, y = actual.time, group = race, color = race),
                 alpha = 0.1) +
-    labs(x = "PM2.5", y = "Completion Time (hr)") +
+    labs(x = "PM2.5", y = "Completion Time (sec)") +
     ggtitle("Male") +
     scale_colour_discrete('race', name="Race")
 
@@ -564,7 +566,7 @@ p.ozone.f <- ggplot(df_F, aes(x = Ozone , y = preds, color = race)) +
     geom_smooth(method = "lm", fullrange = TRUE, size = 0.3) +
     geom_jitter(aes(x = Ozone, y = actual.time, group = race, color = race),
                 alpha = 0.1) +
-    labs(x = "Ozone", y = "Completion Time (hr)") +
+    labs(x = "Ozone", y = "Completion Time (sec)") +
     ggtitle("Female") +
     scale_colour_discrete('race', name="Race")  + 
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
@@ -574,7 +576,7 @@ p.ozone.m <- ggplot(df_M, aes(x = Ozone , y = preds, color = race)) +
     geom_smooth(method = "lm", fullrange = TRUE, size = 0.3) +
     geom_jitter(aes(x = Ozone , y = actual.time, group = race, color = race),
                 alpha = 0.1) +
-    labs(x = "Ozone", y = "Completion Time (hr)") +
+    labs(x = "Ozone", y = "Completion Time (sec)") +
     ggtitle("Male") +
     scale_colour_discrete('race', name="Race")  + 
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) 
@@ -585,7 +587,7 @@ grid.arrange(p.wbgt.f, p.wbgt.m,
              p.ozone.f, p.ozone.m, nrow = 4)
 ```
 
-In terms of fixed effects, the intercept and coefficients for `age`, `age squared`, `WBGT`, `wind`, and `PM2.5` are similar in both the female and male models. Although the coefficient for `ozone` differs a little between the two models, the p-values indicate that the estimated coefficients for `ozone` are not statistically significant. The interpretation of the significant weather parameters for the female model is as follows: for each additional unit increase in WBGT, the completion time is expected to increase by 0.006 hours, holding all other variables constant. For each additional unit increase in wind speed, the completion time is expected to increase by 0.008 hours, holding all other variables constant. For each additional unit increase in PM2.5, the completion time is expected to increase by 0.009 hours, holding all other variables constant. The interpretation for the male model is similar. The random effects for both female and male models are also quite similar, with the variance of the intercept being 0.02078 and 0.02414, respectively. The coefficient values are relatively small, and their magnitudes are similar across female and male groups, as illustrated in Figure 6.
+In terms of fixed effects, the intercept and coefficients for `age`, `age squared`, `WBGT`, `wind`, and `PM2.5` are similar in both the female and male models. Although the coefficient for `ozone` differs a little between the two models, the p-values indicate that the estimated coefficients for `ozone` are not statistically significant. The interpretation of the significant weather parameters for the female model is as follows: for each additional unit increase in WBGT, the completion time is expected to increase by 23.3 seconds, holding all other variables constant. For each additional unit increase in wind speed, the completion time is expected to increase by 30.5 seconds, holding all other variables constant. For each additional unit increase in PM2.5, the completion time is expected to increase by 31.2 seconds, holding all other variables constant. The male model shows comparable patterns in the relationships between weather factors and completion times. The random effects structure reveals similar variations across race locations for both gender-specific models, though the male model exhibits a slightly higher variance in the random intercepts (312832) compared to the female model (269360). The coefficient values are relatively small, and their magnitudes are similar across female and male groups, as illustrated in Figure 6.
 
 # Conclusion
 
