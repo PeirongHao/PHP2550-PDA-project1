@@ -1,5 +1,5 @@
 ---
-title: "PHP 2550: Project 1"
+title: "PHP 2550 Project 1"
 author: "Peirong Hao"
 format: pdf
 include-in-header: 
@@ -52,10 +52,10 @@ library(ggplot2)
 library(gridExtra)
 
 #read in data files
-df.aqi<-read.csv("aqi_values.csv")
-df.course.record<-read.csv("course_record.csv")
-df.marathon.dates<-read.csv("marathon_dates.csv")
-df.project1.main<-read.csv("project1.csv")
+df.aqi<-read.csv("~/Documents/GitHub/PHP2550-PDA-project1/data/aqi_values.csv")
+df.course.record<-read.csv("~/Documents/GitHub/PHP2550-PDA-project1/data/course_record.csv")
+df.marathon.dates<-read.csv("~/Documents/GitHub/PHP2550-PDA-project1/data/marathon_dates.csv")
+df.project1.main<-read.csv("~/Documents/GitHub/PHP2550-PDA-project1/data/project1.csv")
 ```
 
 ```{r}
@@ -252,7 +252,7 @@ ggplot(summary_long, aes(x = age, y = performance, color = Sex, group = interact
 ```
 
 ```{r}
-#| tab-cap: Missingness by Race
+#| tab-cap: Missingness by race
 miss_race<-df.project1.main %>% filter(if_any(everything(), is.na))%>%
   mutate(race = as.factor(race))%>%
   group_by(Year, race)%>%
@@ -306,11 +306,12 @@ df_clean <- df.all %>%
 
 df_clean$completion_time_hours <- df_clean$actual.time / 3600
 
+# spline models
 spline_model_F <- lm(completion_time_hours ~ ns(age, df = 2), data = df_clean[df_clean$Sex == "F", ])
 spline_model_M <- lm(completion_time_hours ~ ns(age, df = 2), data = df_clean[df_clean$Sex == "M", ])
 
+# predictions for smooth spline lines
 age_range <- seq(min(df_clean$age), max(df_clean$age), length.out = 200)
-
 pred_F <- predict(spline_model_F, newdata = data.frame(age = age_range))
 pred_M <- predict(spline_model_M, newdata = data.frame(age = age_range))
 
@@ -320,9 +321,26 @@ spline_data <- data.frame(
   sex = rep(c("Female", "Male"), each = length(age_range))
 )
 
+# minimum completion time for each gender group
+min_F_index <- which.min(pred_F)
+min_F_age <- age_range[min_F_index]
+min_F_time <- pred_F[min_F_index]
+
+min_M_index <- which.min(pred_M)
+min_M_age <- age_range[min_M_index]
+min_M_time <- pred_M[min_M_index]
+
 ggplot(data = df_clean, aes(x = age, y = completion_time_hours, color = Sex)) +
-  geom_point(alpha = 0.2, size = 0.7) +  
+  geom_point(alpha = 0.2, size = 0.7) +
   geom_line(data = spline_data, aes(x = age, y = completion_time, color = sex), size = 1.2) +
+  geom_point(aes(x = min_F_age, y = min_F_time), color = "red", size = 3) +
+  geom_point(aes(x = min_M_age, y = min_M_time), color = "blue", size = 3) +
+  annotate("text", x = min_F_age - 22, y = min_F_time+1, 
+           label = paste0("Min (F): ", round(min_F_age, 1), " yrs, ", round(min_F_time, 2), " hrs"), 
+           color = "red", hjust = 0) +
+  annotate("text", x = min_M_age - 1, y = min_M_time-1, 
+           label = paste0("Min (M): ", round(min_M_age, 1), " yrs, ", round(min_M_time, 2), " hrs"), 
+           color = "blue", hjust = 0) +
   labs(
     x = "Age (years)",
     y = "Completion Time (hours)",
@@ -330,10 +348,40 @@ ggplot(data = df_clean, aes(x = age, y = completion_time_hours, color = Sex)) +
   ) +
   scale_color_manual(values = c("Female" = "red", "Male" = "blue")) +
   theme_minimal()
-
 ```
 
-Figure 1 reveals a U-shaped relationship between age and marathon completion time. Men generally completed marathons faster than women. People aged between 20 and 40 ran much faster than the other age groups. Regarding the completion time of each match, some people in the elder age group took longer than 9 hours to complete, with the longest time being 11 hours and 54 minutes. These outliers could be due to some data collection error since Boston, Twin Cities, and Chicago marathons must be completed within 6 hours, 6 hours and 15 minutes, 6 and a half hours, respectively. However, Grandma's and NYC marathons allow participants to continue finishing on the sidewalk after 7 hours and 8 hours limit, respectively, without services, including cross-street protection, medical assistance, and aid stations. Thus, even though those outliers weren't official finishing times, they could be valid self-reported completion times.
+```{r}
+#| tbl-cap: Slopes of spline plot
+
+# ages at which to calculate slopes
+ages_to_check <- c(25, 50, 75)
+
+# calculate slope at a specific age using finite differences
+calculate_slope <- function(model, age) {
+  delta <- 0.5
+  y_plus <- predict(model, newdata = data.frame(age = age + delta))
+  y_minus <- predict(model, newdata = data.frame(age = age - delta))
+  slope <- (y_plus - y_minus) / (2 * delta)
+  return(slope)
+}
+
+# slopes for both gender groups
+slopes_F <- sapply(ages_to_check, function(age) calculate_slope(spline_model_F, age))
+slopes_M <- sapply(ages_to_check, function(age) calculate_slope(spline_model_M, age))
+
+slope_results <- data.frame(
+  Age = ages_to_check,
+  Female = slopes_F,
+  Male = slopes_M
+)
+
+kable(slope_results, format = "latex", booktabs = TRUE, digits = 3)%>%
+  kable_styling(latex_options = "hold_position")
+```
+
+Figure 1 reveals a clear U-shaped relationship between age and marathon completion time, with faster times observed for individuals aged 20 to 40. Men generally completed marathons faster than women, as indicated by the blue line consistently below the red line and their lower minimum completion time (2.68 hours at age 39.2 for men versus 2.83 hours at age 37.2 for women). Table 4 further highlights this trend: completion times decrease until the minimum point and then increase at a faster rate with age for both genders.
+
+Regarding the completion time of each match, some people in the elder age group took longer than 9 hours to complete, with the longest time being 11 hours and 54 minutes. These outliers could be due to some data collection error since Boston, Twin Cities, and Chicago marathons must be completed within 6 hours, 6 hours and 15 minutes, 6 and a half hours, respectively. However, Grandma's and NYC marathons allow participants to continue finishing on the sidewalk after 7 hours and 8 hours limit, respectively, without services, including cross-street protection, medical assistance, and aid stations. Thus, even though those outliers weren't official finishing times, they could be valid self-reported completion times.
 
 ```{r}
 #| eval: false
@@ -505,9 +553,7 @@ kable(ranef(model_M)$race, booktabs = TRUE, digits = 3, caption="Random Effects 
 ```
 
 ```{r}
-#| fig-cap: Outcome Trend by Weather Parameters
-#| fig-height: 9
-
+#| eval: false
 p.wbgt.f <- ggplot(df_F, aes(x = WBGT, y = preds, color = race)) +
     geom_smooth(method = "lm", fullrange = TRUE, size = 0.3) +
     geom_jitter(aes(x = WBGT, y = actual.time, group = race, color = race),
@@ -587,11 +633,11 @@ grid.arrange(p.wbgt.f, p.wbgt.m,
              p.ozone.f, p.ozone.m, nrow = 4)
 ```
 
-In terms of fixed effects, the intercept and coefficients for `age`, `age squared`, `WBGT`, `wind`, and `PM2.5` are similar in both the female and male models. Although the coefficient for `ozone` differs a little between the two models, the p-values indicate that the estimated coefficients for `ozone` are not statistically significant. The interpretation of the significant weather parameters for the female model is as follows: for each additional unit increase in WBGT, the completion time is expected to increase by 23.3 seconds, holding all other variables constant. For each additional unit increase in wind speed, the completion time is expected to increase by 30.5 seconds, holding all other variables constant. For each additional unit increase in PM2.5, the completion time is expected to increase by 31.2 seconds, holding all other variables constant. The male model shows comparable patterns in the relationships between weather factors and completion times. The random effects structure reveals similar variations across race locations for both gender-specific models, though the male model exhibits a slightly higher variance in the random intercepts (312832) compared to the female model (269360). The coefficient values are relatively small, and their magnitudes are similar across female and male groups, as illustrated in Figure 6.
+In terms of fixed effects, the intercept and coefficients for age, age squared, WBGT, wind speed, and PM2.5 are similar in both the female and male models, with the male model showing slightly smaller coefficient values. While the sign of the ozone coefficient differs between the two models, the p-values indicate that these estimates are not statistically significant. The interpretation of the significant weather parameters for the female model is as follows: for each additional unit increase in WBGT, the completion time is expected to increase by 23.3 seconds, holding all other variables constant. For each additional unit increase in wind speed, the completion time is expected to increase by 30.5 seconds, holding all other variables constant. For each additional unit increase in PM2.5, the completion time is expected to increase by 31.2 seconds, holding all other variables constant. The male model shows comparable patterns in the relationships between weather factors and completion times. The random effects structure reveals similar variations across race locations for both gender-specific models, though the male model exhibits a slightly higher variance in the random intercepts (312832) compared to the female model (269360). 
 
 # Conclusion
 
-People aged between 20 and 40 run much faster than the other age groups and could break course records. Age and weather parameters have a positive linear relationship with completion time: older runners finish the marathon later; severe weather, such as strong winds and higher temperatures, also delays completion. Additionally, we discovered that, on average, men run faster than women. Ozone is not s statistically significant parameter in the random intercept models. This could result from the observed ozone level falling between 0 and 0.054 ppm, which is thought to be good air quality ([Kaiterra](https://learn.kaiterra.com/en/resources/ozone-what-levels-are-safe)). Four marathons had incomplete weather data. If we conduct imputation for missing values, we might get more robust results. It is also worth examining more marathons in different regions to investigate the impact of weather on performance further.
+People aged between 20 and 40 run much faster than the other age groups and could break course records. Age and weather parameters have a positive linear relationship with completion time: older runners finish the marathon later; severe weather, such as strong winds and higher temperatures, also delays completion. Additionally, we found that men, on average, run faster than women. Ozone is not s statistically significant parameter in the random intercept models. This could result from the observed ozone level falling between 0 and 0.054 ppm, which is thought to be good air quality ([Kaiterra](https://learn.kaiterra.com/en/resources/ozone-what-levels-are-safe)). Four marathons had incomplete weather data. If we conduct imputation for missing values, we might get more robust results. It is also worth examining more marathons in different regions to investigate the impact of weather on performance further.
 
 # References
 
