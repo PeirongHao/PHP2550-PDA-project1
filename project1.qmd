@@ -52,10 +52,10 @@ library(ggplot2)
 library(gridExtra)
 
 #read in data files
-df.aqi<-read.csv("~/Documents/GitHub/PHP2550-PDA-project1/data/aqi_values.csv")
-df.course.record<-read.csv("~/Documents/GitHub/PHP2550-PDA-project1/data/course_record.csv")
-df.marathon.dates<-read.csv("~/Documents/GitHub/PHP2550-PDA-project1/data/marathon_dates.csv")
-df.project1.main<-read.csv("~/Documents/GitHub/PHP2550-PDA-project1/data/project1.csv")
+df.aqi<-read.csv("~/Documents/GitHub/PHP2550-PDA-projects/data/aqi_values.csv")
+df.course.record<-read.csv("~/Documents/GitHub/PHP2550-PDA-projects/data/course_record.csv")
+df.marathon.dates<-read.csv("~/Documents/GitHub/PHP2550-PDA-projects/data/marathon_dates.csv")
+df.project1.main<-read.csv("~/Documents/GitHub/PHP2550-PDA-projects/data/project1.csv")
 ```
 
 ```{r}
@@ -633,7 +633,7 @@ grid.arrange(p.wbgt.f, p.wbgt.m,
              p.ozone.f, p.ozone.m, nrow = 4)
 ```
 
-In terms of fixed effects, the intercept and coefficients for age, age squared, WBGT, wind speed, and PM2.5 are similar in both the female and male models, with the male model showing slightly smaller coefficient values. While the sign of the ozone coefficient differs between the two models, the p-values indicate that these estimates are not statistically significant. The interpretation of the significant weather parameters for the female model is as follows: for each additional unit increase in WBGT, the completion time is expected to increase by 23.3 seconds, holding all other variables constant. For each additional unit increase in wind speed, the completion time is expected to increase by 30.5 seconds, holding all other variables constant. For each additional unit increase in PM2.5, the completion time is expected to increase by 31.2 seconds, holding all other variables constant. The male model shows comparable patterns in the relationships between weather factors and completion times. The random effects structure reveals similar variations across race locations for both gender-specific models, though the male model exhibits a slightly higher variance in the random intercepts (312832) compared to the female model (269360). 
+In terms of fixed effects, the intercept and coefficients for age, age squared, WBGT, wind speed, and PM2.5 are similar in both the female and male models, with the male model showing slightly smaller coefficient values. While the sign of the ozone coefficient differs between the two models, the p-values indicate that these estimates are not statistically significant. The interpretation of the significant weather parameters for the female model is as follows: for each additional unit increase in WBGT, the completion time is expected to increase by 23.3 seconds, holding all other variables constant. For each additional unit increase in wind speed, the completion time is expected to increase by 30.5 seconds, holding all other variables constant. For each additional unit increase in PM2.5, the completion time is expected to increase by 31.2 seconds, holding all other variables constant. The male model shows comparable patterns in the relationships between weather factors and completion times. The random effects structure reveals similar variations across race locations for both gender-specific models, though the male model exhibits a slightly higher variance in the random intercepts (312832) compared to the female model (269360).
 
 # Conclusion
 
